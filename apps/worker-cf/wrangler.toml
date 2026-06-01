@@ -1,0 +1,16 @@
+name               = "viralclips-processor"
+main               = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# R2 binding — el Worker accede al bucket directamente, sin credenciales API.
+# No se necesita ACCOUNT_ID ni R2_ACCESS_KEY_ID para este enfoque.
+[[r2_buckets]]
+binding     = "VIDEOS"
+bucket_name = "viralclips-videos"
+
+# Entorno local de desarrollo
+[dev]
+port = 8787
+
+# Para producción: wrangler deploy
+# URL resultante: https://viralclips-processor.<subdominio>.workers.dev
