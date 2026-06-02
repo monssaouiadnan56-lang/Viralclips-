@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
@@ -7,6 +6,13 @@ import os from 'os';
 import { createVideoClip, extractAudio } from '@/lib/videoProcessor';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import {
+  ApiError,
+  getServiceSupabase,
+  requireActiveProPlan,
+  requireOwnedVideo,
+  requireUser,
+} from '@/lib/server/auth';
 
 const r2 = new S3Client({
   region: 'auto',
@@ -31,11 +37,9 @@ async function downloadFromR2(key: string): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer());
 }
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const openaiApiKey = process.env.OPENAI_API_KEY!;
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+const supabase = getServiceSupabase();
 const openai = new OpenAI({ apiKey: openaiApiKey });
 
 interface TranscriptSegment {
@@ -75,15 +79,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Video ID requerido' }, { status: 400 });
     }
 
-    const { data: video, error: videoError } = await supabase
-      .from('videos')
-      .select('*')
-      .eq('id', videoId)
-      .single();
-
-    if (videoError || !video) {
-      return NextResponse.json({ error: 'Video no encontrado' }, { status: 404 });
-    }
+    const user = await requireUser(request);
+    await requireActiveProPlan(user.id);
+    const video = await requireOwnedVideo(videoId, user.id);
 
     await supabase.from('videos').update({ status: 'processing' }).eq('id', videoId);
 
@@ -203,6 +201,10 @@ export async function POST(request: Request) {
     });
 
   } catch (error: unknown) {
+    if (error instanceof ApiError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
     const message = error instanceof Error ? error.message : 'Error desconocido';
     const stack = error instanceof Error ? error.stack : undefined;
     console.error('Error processing video:', error);

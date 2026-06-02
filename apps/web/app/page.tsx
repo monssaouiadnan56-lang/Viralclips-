@@ -7,9 +7,54 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 export default function LandingPage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const router = useRouter();
+
+  const startFree = () => {
+    router.push("/signup");
+  };
+
+  const contactSales = () => {
+    window.location.href = "mailto:soporte@viralclips.ai?subject=ViralClips%20Agency%20plan";
+  };
+
+  const upgradeToPro = async () => {
+    setCheckoutLoading(true);
+
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.push("/signup");
+        return;
+      }
+
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
+      });
+      const data = await res.json() as { url?: string; error?: string };
+
+      if (!res.ok) throw new Error(data.error ?? "No se pudo crear el pago");
+      if (!data.url) throw new Error("Stripe no devolvio una URL de pago");
+
+      window.location.href = data.url;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Error desconocido";
+      alert(message);
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-white selection:bg-purple-500/30 font-sans">
@@ -320,6 +365,7 @@ export default function LandingPage() {
                 features={["3 videos per month", "Viral score detection", "No watermark"]}
                 cta="Start Free"
                 popular={false}
+                onClick={startFree}
               />
               <PricingCard
                 name="Pro"
@@ -329,6 +375,8 @@ export default function LandingPage() {
                 features={["30 videos per month", "Unlimited viral clips", "No watermarks", "Priority rendering"]}
                 cta="Upgrade to Pro"
                 popular={true}
+                loading={checkoutLoading}
+                onClick={upgradeToPro}
               />
               <PricingCard
                 name="Agency"
@@ -338,6 +386,7 @@ export default function LandingPage() {
                 features={["Unlimited videos", "5 team members", "Custom brand templates", "API access"]}
                 cta="Contact Sales"
                 popular={false}
+                onClick={contactSales}
               />
             </div>
           </div>
@@ -444,9 +493,11 @@ function FeatureCard({ icon, title, description }: { icon: React.ReactNode; titl
   );
 }
 
-function PricingCard({ name, price, period, description, features, cta, popular }: {
+function PricingCard({ name, price, period, description, features, cta, popular, loading, onClick }: {
   name: string; price: string; period: string; description: string;
   features: string[]; cta: string; popular: boolean;
+  loading?: boolean;
+  onClick: () => void;
 }) {
   return (
     <div className={`relative p-8 rounded-2xl border ${popular ? "border-purple-500/50 bg-purple-500/5" : "border-white/5 bg-white/5"} backdrop-blur-sm flex flex-col`}>
@@ -471,8 +522,12 @@ function PricingCard({ name, price, period, description, features, cta, popular 
           </li>
         ))}
       </ul>
-      <button className={`w-full py-3 rounded-xl font-semibold transition-colors ${popular ? "bg-purple-600 hover:bg-purple-500 text-white" : "bg-white/10 hover:bg-white/15 text-white"}`}>
-        {cta}
+      <button
+        onClick={onClick}
+        disabled={loading}
+        className={`w-full py-3 rounded-xl font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${popular ? "bg-purple-600 hover:bg-purple-500 text-white" : "bg-white/10 hover:bg-white/15 text-white"}`}
+      >
+        {loading ? "Redirecting..." : cta}
       </button>
     </div>
   );

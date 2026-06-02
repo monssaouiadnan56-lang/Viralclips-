@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Film, Calendar, MoreVertical, Sparkles, ChevronDown,
@@ -16,6 +17,11 @@ interface VideoCardProps {
   onPlayClip?: (url: string) => void;
   onRefresh?: () => void;
 }
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+);
 
 const STATUS_MAP: Record<string, { label: string; textColor: string; dotColor: string; pulse: boolean }> = {
   completed: { label: 'Completado', textColor: 'text-green-400', dotColor: 'bg-green-400', pulse: false },
@@ -60,9 +66,15 @@ export default function VideoCard({
 
   const handleProcess = async () => {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No hay sesión activa');
+
       const res = await fetch('/api/process-video', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ videoId: video.id }),
       });
       const data = await res.json() as { error?: string };
@@ -87,9 +99,15 @@ export default function VideoCard({
     if (!trimmed) return;
     setSaving(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No hay sesión activa');
+
       const res = await fetch('/api/update-video', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ videoId: video.id, title: trimmed }),
       });
       const data = await res.json() as { error?: string };
@@ -108,9 +126,15 @@ export default function VideoCard({
     setMenuOpen(false);
     if (!window.confirm('¿Estás seguro de que quieres eliminar este video y todos sus clips?')) return;
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No hay sesión activa');
+
       const res = await fetch('/api/delete-video', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ videoId: video.id }),
       });
       const data = await res.json() as { error?: string };

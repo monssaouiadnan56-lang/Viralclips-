@@ -14,19 +14,11 @@ interface Props {
   onSuccess?: () => void;
 }
 
-// Envía el video al Worker via PUT con body binario directo.
-// El Worker hace streaming a R2 sin buffering → sin límite de tamaño.
-// XHR da progreso real; FormData bufferea todo en memoria y falla con archivos >128 MB.
-function uploadToWorker(
+function uploadToSignedUrl(
   file: File,
-  workerUrl: string,
-  videoId: string,
-  filename: string,
+  uploadUrl: string,
   onProgress: (pct: number) => void,
-): Promise<string> {
-  const key = `${videoId}/${filename}`;
-  const url = `${workerUrl}/upload/${key}`;
-
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
 
@@ -36,28 +28,18 @@ function uploadToWorker(
 
     xhr.addEventListener('load', () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const body = JSON.parse(xhr.responseText) as { key?: string };
-          resolve(body.key ?? key);
-        } catch {
-          resolve(key);
-        }
+        resolve();
       } else {
-        let msg = `HTTP ${xhr.status}`;
-        try {
-          const body = JSON.parse(xhr.responseText) as { error?: string };
-          if (body.error) msg = body.error;
-        } catch { /* ignore */ }
-        reject(new Error(`Worker: ${msg}`));
+        reject(new Error(`R2: HTTP ${xhr.status}`));
       }
     });
 
     xhr.addEventListener('error', () => reject(new Error('Error de red durante el upload')));
     xhr.addEventListener('abort', () => reject(new Error('Upload cancelado')));
 
-    xhr.open('PUT', url);
+    xhr.open('PUT', uploadUrl);
     xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
-    xhr.send(file); // body binario directo — el Worker lo hace stream a R2
+    xhr.send(file);
   });
 }
 
@@ -103,26 +85,34 @@ export default function UploadVideoAdvanced({ onSuccess }: Props) {
     setProgress(0);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('No hay sesión activa');
-
-      const workerUrl = process.env.NEXT_PUBLIC_CLOUDFLARE_WORKER_URL;
-      if (!workerUrl) throw new Error('NEXT_PUBLIC_CLOUDFLARE_WORKER_URL no configurado');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No hay sesión activa');
 
       // ID estable que vincula la clave R2 con la fila de la BD
       const videoId  = crypto.randomUUID();
       const ext      = file.name.split('.').pop() ?? 'mp4';
       const filename = `${Date.now()}.${ext}`;
 
-      // ── 1. Subir al Worker via PUT streaming (sin límite de tamaño) ─────
-      const r2Key = await uploadToWorker(file, workerUrl, videoId, filename, setProgress);
+      const uploadRes = await fetch('/api/get-upload-url', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ videoId, filename, contentType: file.type || 'video/mp4' }),
+      });
+      const uploadData = await uploadRes.json() as { uploadUrl?: string; key?: string; error?: string };
+      if (!uploadRes.ok) throw new Error(uploadData.error ?? 'No se pudo preparar la subida');
+      if (!uploadData.uploadUrl || !uploadData.key) throw new Error('Respuesta de subida incompleta');
+
+      await uploadToSignedUrl(file, uploadData.uploadUrl, setProgress);
 
       // ── 2. Guardar referencia en Supabase (lógica de BD sin cambios) ──────
       const { error: dbError } = await supabase.from('videos').insert({
         id:         videoId,
-        user_id:    user.id,
+        user_id:    session.user.id,
         title:      file.name,
-        source_url: r2Key,    // clave R2, ej: "uuid/1714000000000.mp4"
+        source_url: uploadData.key,
         status:     'pending',
       });
 

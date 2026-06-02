@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { ApiError, getServiceSupabase, requireOwnedVideo, requireUser } from '@/lib/server/auth';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const supabase = getServiceSupabase();
 
 export async function POST(request: Request) {
   try {
@@ -14,6 +11,9 @@ export async function POST(request: Request) {
     if (!videoId || !title?.trim()) {
       return NextResponse.json({ error: 'videoId y title requeridos' }, { status: 400 });
     }
+
+    const user = await requireUser(request);
+    await requireOwnedVideo(videoId, user.id);
 
     const { error } = await supabase
       .from('videos')
@@ -26,6 +26,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
+    if (error instanceof ApiError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
     const message = error instanceof Error ? error.message : 'Error desconocido';
     return NextResponse.json({ error: message }, { status: 500 });
   }

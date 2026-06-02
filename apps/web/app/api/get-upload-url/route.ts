@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { ApiError, requireActiveProPlan, requireUser } from '@/lib/server/auth';
 
 // Reuse the client across requests (module-level singleton).
 const s3 = new S3Client({
@@ -14,6 +15,9 @@ const s3 = new S3Client({
 
 export async function POST(request: Request) {
   try {
+    const user = await requireUser(request);
+    await requireActiveProPlan(user.id);
+
     const body = await request.json() as {
       videoId?: string;
       filename?: string;
@@ -26,7 +30,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'videoId requerido' }, { status: 400 });
     }
 
-    const key = `${videoId}/${filename}`;
+    const key = `${user.id}/${videoId}/${filename}`;
 
     const uploadUrl = await getSignedUrl(
       s3,
@@ -40,6 +44,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ uploadUrl, key });
   } catch (err: unknown) {
+    if (err instanceof ApiError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+
     const message = err instanceof Error ? err.message : 'Error generando URL';
     console.error('get-upload-url error:', err);
     return NextResponse.json({ error: message }, { status: 500 });

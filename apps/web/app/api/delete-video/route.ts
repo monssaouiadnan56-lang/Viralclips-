@@ -1,12 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { ApiError, getServiceSupabase, requireOwnedVideo, requireUser } from '@/lib/server/auth';
 
-// Uses service role key to bypass RLS — the anon client silently ignores DELETE/UPDATE
-// if no permissive RLS policies are configured on the table.
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const supabase = getServiceSupabase();
 
 export async function POST(request: Request) {
   try {
@@ -18,6 +13,9 @@ export async function POST(request: Request) {
     }
 
     console.log(`🗑️  Deleting video ${videoId}...`);
+
+    const user = await requireUser(request);
+    await requireOwnedVideo(videoId, user.id);
 
     // Clips first — foreign key constraint requires this order
     const { error: clipsErr } = await supabase
@@ -43,6 +41,10 @@ export async function POST(request: Request) {
     console.log(`   ✅ Video ${videoId} eliminado`);
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
+    if (error instanceof ApiError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
     const message = error instanceof Error ? error.message : 'Error desconocido';
     console.error('delete-video error:', error);
     return NextResponse.json({ error: message }, { status: 500 });

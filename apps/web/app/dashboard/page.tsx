@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import UploadVideoAdvanced from '@/components/UploadVideo';
 import VideoCard from '@/components/VideoCard';
 import AnimatedBackground from '@/components/AnimatedBackground';
+import UpgradeButton from '@/components/UpgradeButton';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -40,6 +41,10 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [subscription, setSubscription] = useState<{ status: string; plan: string }>({
+    status: 'free',
+    plan: 'free',
+  });
   const router = useRouter();
 
   useEffect(() => { checkUser(); }, []);
@@ -50,6 +55,7 @@ export default function DashboardPage() {
     setUser(user);
     fetchVideos(user.id);
     fetchClips(user.id);
+    fetchSubscription(user.id);
   };
 
   const fetchVideos = async (userId: string) => {
@@ -72,6 +78,20 @@ export default function DashboardPage() {
       .order('created_at', { ascending: false });
     if (error) { console.error('fetchClips error:', error); toast.error('Error al cargar clips'); }
     else setClips(data ?? []);
+  };
+
+  const fetchSubscription = async (userId: string) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('subscription_status, plan_name')
+      .eq('id', userId)
+      .single();
+    if (data) {
+      setSubscription({
+        status: (data.subscription_status as string | null) ?? 'free',
+        plan:   (data.plan_name          as string | null) ?? 'free',
+      });
+    }
   };
 
   const toggleVideoClips = (videoId: string) =>
@@ -510,11 +530,35 @@ export default function DashboardPage() {
                   </div>
                   <div>
                     <label className="block text-[11px] font-semibold text-[#cbc3d7] uppercase tracking-widest mb-2">Current Plan</label>
-                    <div className="flex items-center gap-3 px-4 py-3 bg-[#060e20] border border-white/[0.08] rounded-xl">
-                      <Sparkles className="w-4 h-4 text-[#d0bcff]" />
-                      <span className="text-sm text-[#dae2fd]">Free Plan</span>
-                      <span className="ml-auto text-[10px] text-[#d0bcff] bg-[#a078ff]/20 px-2.5 py-1 rounded-full border border-[#d0bcff]/30 font-semibold">Active</span>
-                    </div>
+
+                    {subscription.plan === 'pro' && subscription.status === 'active' ? (
+                      /* ── Plan Pro activo ─────────────────────────────── */
+                      <div className="flex items-center gap-3 px-4 py-3 bg-[#060e20] border border-[#d0bcff]/30 rounded-xl">
+                        <Sparkles className="w-4 h-4 text-[#d0bcff]" />
+                        <span className="text-sm font-semibold text-[#dae2fd]">ViralClips Pro</span>
+                        <span className="ml-auto flex items-center gap-1.5 text-[10px] text-green-400 bg-green-500/10 px-2.5 py-1 rounded-full border border-green-500/30 font-semibold">
+                          <CheckCircle className="w-3 h-3" />
+                          Activo
+                        </span>
+                      </div>
+                    ) : subscription.status === 'past_due' ? (
+                      /* ── Pago pendiente ──────────────────────────────── */
+                      <div className="flex items-center gap-3 px-4 py-3 bg-[#060e20] border border-amber-500/30 rounded-xl mb-3">
+                        <Sparkles className="w-4 h-4 text-amber-400" />
+                        <span className="text-sm text-[#dae2fd]">Pro — pago pendiente</span>
+                        <span className="ml-auto text-[10px] text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/30 font-semibold">Atrasado</span>
+                      </div>
+                    ) : (
+                      /* ── Free plan — mostrar upgrade ─────────────────── */
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3 px-4 py-3 bg-[#060e20] border border-white/[0.08] rounded-xl">
+                          <Sparkles className="w-4 h-4 text-[#d0bcff]" />
+                          <span className="text-sm text-[#dae2fd]">Free Plan</span>
+                          <span className="ml-auto text-[10px] text-[#cbc3d7] bg-white/5 px-2.5 py-1 rounded-full border border-white/10 font-semibold">Activo</span>
+                        </div>
+                        <UpgradeButton className="w-full" />
+                      </div>
+                    )}
                   </div>
                   <div className="pt-4 border-t border-white/[0.07]">
                     <button className="px-6 py-2.5 bg-gradient-to-r from-[#d0bcff] to-[#adc6ff] text-[#3c0091] text-sm font-bold rounded-xl transition-all hover:brightness-110">

@@ -1,5 +1,6 @@
 export interface Env {
   VIDEOS: R2Bucket;
+  WORKER_UPLOAD_SECRET: string;
 }
 
 const CORS: Record<string, string> = {
@@ -21,11 +22,15 @@ export default {
     try {
       // ── POST /upload  →  FormData { file, videoId, filename } ────────────
       if (request.method === 'POST' && url.pathname === '/upload') {
+        const unauthorized = requireUploadSecret(request, env);
+        if (unauthorized) return unauthorized;
         return handleUploadFormData(request, env);
       }
 
       // ── PUT /upload/<key>  →  raw binary stream (fallback, sin límite) ───
       if (request.method === 'PUT' && url.pathname.startsWith('/upload/')) {
+        const unauthorized = requireUploadSecret(request, env);
+        if (unauthorized) return unauthorized;
         return handleUploadRaw(request, url, env);
       }
 
@@ -61,6 +66,16 @@ export default {
     }
   },
 };
+
+function requireUploadSecret(request: Request, env: Env): Response | null {
+  const secret = request.headers.get('x-worker-upload-secret');
+
+  if (!env.WORKER_UPLOAD_SECRET || secret !== env.WORKER_UPLOAD_SECRET) {
+    return Response.json({ error: 'No autorizado' }, { status: 401, headers: CORS });
+  }
+
+  return null;
+}
 
 // ── POST /upload — recibe FormData con los campos: file, videoId, filename ───
 
