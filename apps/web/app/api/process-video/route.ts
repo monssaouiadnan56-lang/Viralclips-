@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { createVideoClip, extractAudio } from '@/lib/videoProcessor';
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
   ApiError,
@@ -35,6 +35,25 @@ async function downloadFromR2(key: string): Promise<Buffer> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`R2 download failed: HTTP ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
+}
+
+async function uploadClipToR2(localPath: string, key: string): Promise<string> {
+  const stat = fs.statSync(localPath);
+  await r2.send(new PutObjectCommand({
+    Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME!,
+    Key: key,
+    Body: fs.createReadStream(localPath),
+    ContentType: 'video/mp4',
+    ContentLength: stat.size,
+  }));
+  return getSignedUrl(
+    r2,
+    new GetObjectCommand({
+      Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME!,
+      Key: key,
+    }),
+    { expiresIn: 7 * 24 * 3600 },
+  );
 }
 
 const openaiApiKey = process.env.OPENAI_API_KEY!;
@@ -113,17 +132,14 @@ export async function POST(request: Request) {
     });
 
     const generatedClips = [];
-    const clipsDir = path.join(process.cwd(), 'public', 'clips', videoId);
-    if (!fs.existsSync(clipsDir)) fs.mkdirSync(clipsDir, { recursive: true });
 
-    console.log(`\n📁 Output dir: ${clipsDir}`);
-    console.log(`📂 Input file exists: ${fs.existsSync(tempFilePath)} → ${tempFilePath}`);
+    console.log(`\n📂 Input file: ${tempFilePath} (exists: ${fs.existsSync(tempFilePath)})`);
 
     for (let i = 0; i < Math.min(viralMoments.length, 3); i++) {
       const moment = viralMoments[i];
       if (!moment) continue;
 
-      const clipPath = path.join(clipsDir, `clip-${i + 1}.mp4`);
+      const clipPath = path.join(os.tmpdir(), `${videoId}-clip-${i + 1}.mp4`);
       const startTime = Math.max(0, moment.start_time);
       const endTime = moment.end_time;
       const duration = endTime - startTime;
@@ -161,7 +177,8 @@ export async function POST(request: Request) {
           console.log(`   🎬 Clip sin subtítulos generado (fallback)`);
         }
 
-        const clipUrl = `/clips/${videoId}/clip-${i + 1}.mp4`;
+        const r2Key = `clips/${videoId}/clip-${i + 1}.mp4`;
+        const clipUrl = await uploadClipToR2(clipPath, r2Key);
 
         const { error: clipError } = await supabase.from('clips').insert({
           video_id: videoId,
@@ -172,11 +189,12 @@ export async function POST(request: Request) {
         if (clipError) console.error('Error saving clip to DB:', clipError);
 
         generatedClips.push({ title: moment.title, url: clipUrl, startTime, endTime });
-        console.log(`   ✅ Clip ${i + 1} saved → ${clipUrl}`);
+        console.log(`   ✅ Clip ${i + 1} uploaded → R2: ${r2Key}`);
       } catch (clipError) {
         console.error(`   ❌ FFmpeg error for clip ${i + 1}:`, clipError);
       } finally {
         if (srtPath) await deleteWithRetry(srtPath);
+        await deleteWithRetry(clipPath);
       }
     }
 
@@ -187,7 +205,7 @@ export async function POST(request: Request) {
       title: video.title || `Video ${videoId}`,
     }).eq('id', videoId);
 
-    console.log('\n⏳ Waiting for FFmpeg to finish...');
+    console.log('\n🧹 Cleaning up temp files...');
     await deleteWithRetry(tempFilePath);
 
     console.log(`\n✅ Done — ${generatedClips.length} clips generated (status: ${finalStatus})`);

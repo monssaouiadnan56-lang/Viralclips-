@@ -1,5 +1,30 @@
 import { NextResponse } from 'next/server';
+import { S3Client, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { ApiError, getServiceSupabase, requireOwnedVideo, requireUser } from '@/lib/server/auth';
+
+const r2 = new S3Client({
+  region: 'auto',
+  endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY!,
+  },
+});
+
+async function deleteR2Prefix(prefix: string): Promise<void> {
+  const list = await r2.send(new ListObjectsV2Command({
+    Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME!,
+    Prefix: prefix,
+  }));
+  await Promise.all(
+    (list.Contents ?? [])
+      .filter((obj): obj is { Key: string } => typeof obj.Key === 'string')
+      .map(obj => r2.send(new DeleteObjectCommand({
+        Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME!,
+        Key: obj.Key,
+      }))),
+  );
+}
 
 const supabase = getServiceSupabase();
 
@@ -15,7 +40,16 @@ export async function POST(request: Request) {
     console.log(`🗑️  Deleting video ${videoId}...`);
 
     const user = await requireUser(request);
-    await requireOwnedVideo(videoId, user.id);
+    const video = await requireOwnedVideo(videoId, user.id);
+
+    // Delete R2 objects — non-fatal so we use allSettled
+    await Promise.allSettled([
+      deleteR2Prefix(`clips/${videoId}/`),
+      r2.send(new DeleteObjectCommand({
+        Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME!,
+        Key: video.source_url,
+      })),
+    ]);
 
     // Clips first — foreign key constraint requires this order
     const { error: clipsErr } = await supabase

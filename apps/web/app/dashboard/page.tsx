@@ -49,6 +49,18 @@ export default function DashboardPage() {
 
   useEffect(() => { checkUser(); }, []);
 
+  const isProcessing = videos.some(v => v.status === 'processing');
+  useEffect(() => {
+    if (!isProcessing || !user?.id) return;
+    const id = user.id as string;
+    const interval = setInterval(() => {
+      fetchVideos(id);
+      fetchClips(id);
+    }, 5000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isProcessing, user?.id]);
+
   const checkUser = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push('/login'); return; }
@@ -141,7 +153,9 @@ export default function DashboardPage() {
           <h1 className="font-sora text-xl font-bold bg-gradient-to-r from-[#d0bcff] to-[#f751a1] bg-clip-text text-transparent">
             ViralClips AI
           </h1>
-          <p className="text-[11px] text-[#cbc3d7]/70 font-semibold tracking-widest uppercase mt-0.5">Pro Plan</p>
+          <p className="text-[11px] text-[#cbc3d7]/70 font-semibold tracking-widest uppercase mt-0.5">
+            {subscription.plan === 'pro' && subscription.status === 'active' ? 'Pro Plan' : 'Free Plan'}
+          </p>
         </div>
 
         <nav className="flex-1 space-y-0.5 px-2">
