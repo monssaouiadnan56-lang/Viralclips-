@@ -15,6 +15,27 @@ const r2 = new S3Client({
 const supabase = getServiceSupabase();
 const MAX_BYTES = 500 * 1024 * 1024;
 
+// Platforms that require yt-dlp (no direct video URL) → delegate to worker
+const SOCIAL_DOMAINS = [
+  'youtube.com', 'youtu.be',
+  'tiktok.com',
+  'instagram.com',
+  'twitter.com', 'x.com',
+  'facebook.com', 'fb.watch',
+  'vimeo.com',
+  'twitch.tv',
+  'reddit.com',
+];
+
+function requiresWorker(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    return SOCIAL_DOMAINS.some(d => host === d || host.endsWith('.' + d));
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const user = await requireUser(request);
@@ -37,6 +58,39 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Solo se permiten URLs http/https' }, { status: 400 });
     }
 
+    // ── Social media URL → delegate to worker (uses yt-dlp) ────────────────
+    if (requiresWorker(url)) {
+      const workerUrl = process.env.WORKER_URL;
+      if (!workerUrl) {
+        return NextResponse.json(
+          { error: 'El worker de descarga no está configurado. Contacta al administrador.' },
+          { status: 503 },
+        );
+      }
+
+      const workerRes = await fetch(`${workerUrl}/import-url`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.WORKER_SECRET}`,
+        },
+        body: JSON.stringify({ url, userId: user.id }),
+        signal: AbortSignal.timeout(300_000), // 5 min — yt-dlp can be slow
+      });
+
+      const workerData = await workerRes.json() as {
+        success?: boolean;
+        videoId?: string;
+        title?: string;
+        error?: string;
+      };
+
+      if (!workerRes.ok) throw new Error(workerData.error ?? 'Error en el worker');
+
+      return NextResponse.json({ success: true, videoId: workerData.videoId });
+    }
+
+    // ── Direct video URL → download here ───────────────────────────────────
     const videoRes = await fetch(url, { redirect: 'follow' });
     if (!videoRes.ok) {
       return NextResponse.json(
@@ -48,7 +102,7 @@ export async function POST(request: Request) {
     const contentType = videoRes.headers.get('content-type') ?? '';
     if (!contentType.startsWith('video/') && !contentType.startsWith('application/octet-stream')) {
       return NextResponse.json(
-        { error: 'La URL no apunta a un archivo de video directo (MP4, MOV, AVI...)' },
+        { error: 'La URL no apunta a un archivo de video directo. Para YouTube/TikTok/Instagram pega la URL normal de la plataforma.' },
         { status: 400 },
       );
     }

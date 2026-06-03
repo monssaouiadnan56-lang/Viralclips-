@@ -88,12 +88,12 @@ export default function ImportLinkModal({ open, onClose, onSuccess }: Props) {
             </div>
 
             <p className="text-sm text-[#cbc3d7]/70 mb-4">
-              Pega una URL directa a un archivo de video (MP4, MOV, AVI, etc.) para importarlo a tu biblioteca.
+              Pega la URL de un video de YouTube, TikTok, Instagram, Vimeo, o un enlace directo a un archivo MP4/MOV.
             </p>
 
             <input
               type="url"
-              placeholder="https://example.com/video.mp4"
+              placeholder="https://youtube.com/watch?v=... o https://tiktok.com/..."
               value={url}
               onChange={e => setUrl(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleImport(); }}

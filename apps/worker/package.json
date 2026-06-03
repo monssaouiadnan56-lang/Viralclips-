@@ -10,12 +10,16 @@
   },
   "dependencies": {
     "@viralclips/shared": "workspace:*",
+    "@aws-sdk/client-s3": "^3.600.0",
     "@supabase/supabase-js": "^2.47.0",
-    "openai": "^4.77.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.0",
     "fluent-ffmpeg": "^2.1.3",
-    "dotenv": "^16.4.7"
+    "openai": "^4.77.0",
+    "yt-dlp-wrap": "^2.3.2"
   },
   "devDependencies": {
+    "@types/express": "^4.17.21",
     "@types/fluent-ffmpeg": "^2.1.27",
     "@types/node": "^20",
     "tsx": "^4.19.2",
