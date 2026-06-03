@@ -73,7 +73,7 @@ export default function UpgradeButton({ className = '' }: Props) {
       ) : (
         <>
           <Zap className="w-4 h-4" />
-          Upgrade to Pro — $19/mo
+          Upgrade to Pro — $14.99/mo
         </>
       )}
     </button>

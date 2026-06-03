@@ -369,7 +369,7 @@ export default function LandingPage() {
               />
               <PricingCard
                 name="Pro"
-                price="$19"
+                price="$14.99"
                 period="/mo"
                 description="For consistent creators scaling their presence."
                 features={["30 videos per month", "Unlimited viral clips", "No watermarks", "Priority rendering"]}

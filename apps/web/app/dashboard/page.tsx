@@ -14,6 +14,7 @@ import UploadVideoAdvanced from '@/components/UploadVideo';
 import VideoCard from '@/components/VideoCard';
 import AnimatedBackground from '@/components/AnimatedBackground';
 import UpgradeButton from '@/components/UpgradeButton';
+import ImportLinkModal from '@/components/ImportLinkModal';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -41,6 +42,7 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showImportModal, setShowImportModal] = useState(false);
   const [subscription, setSubscription] = useState<{ status: string; plan: string }>({
     status: 'free',
     plan: 'free',
@@ -295,7 +297,10 @@ export default function DashboardPage() {
                     >
                       Upload Now
                     </button>
-                    <button className="px-8 py-3 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold tracking-widest uppercase transition-all">
+                    <button
+                      onClick={() => setShowImportModal(true)}
+                      className="px-8 py-3 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold tracking-widest uppercase transition-all"
+                    >
                       Import from Link
                     </button>
                   </div>
@@ -586,6 +591,12 @@ export default function DashboardPage() {
 
         </AnimatePresence>
       </main>
+
+      <ImportLinkModal
+        open={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onSuccess={handleRefresh}
+      />
 
       {/* ── Video Modal ── */}
       <AnimatePresence>

@@ -1,0 +1,101 @@
+import { NextResponse } from 'next/server';
+import path from 'path';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { ApiError, getServiceSupabase, requireActiveProPlan, requireUser } from '@/lib/server/auth';
+
+const r2 = new S3Client({
+  region: 'auto',
+  endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY!,
+  },
+});
+
+const supabase = getServiceSupabase();
+const MAX_BYTES = 500 * 1024 * 1024;
+
+export async function POST(request: Request) {
+  try {
+    const user = await requireUser(request);
+    await requireActiveProPlan(user.id);
+
+    const { url } = await request.json() as { url?: string };
+
+    if (!url?.trim()) {
+      return NextResponse.json({ error: 'URL requerida' }, { status: 400 });
+    }
+
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return NextResponse.json({ error: 'URL inválida' }, { status: 400 });
+    }
+
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return NextResponse.json({ error: 'Solo se permiten URLs http/https' }, { status: 400 });
+    }
+
+    const videoRes = await fetch(url, { redirect: 'follow' });
+    if (!videoRes.ok) {
+      return NextResponse.json(
+        { error: `No se pudo acceder a la URL: HTTP ${videoRes.status}` },
+        { status: 400 },
+      );
+    }
+
+    const contentType = videoRes.headers.get('content-type') ?? '';
+    if (!contentType.startsWith('video/') && !contentType.startsWith('application/octet-stream')) {
+      return NextResponse.json(
+        { error: 'La URL no apunta a un archivo de video directo (MP4, MOV, AVI...)' },
+        { status: 400 },
+      );
+    }
+
+    const contentLength = Number(videoRes.headers.get('content-length') ?? '0');
+    if (contentLength > MAX_BYTES) {
+      return NextResponse.json({ error: 'El video supera el límite de 500 MB' }, { status: 400 });
+    }
+
+    const buffer = Buffer.from(await videoRes.arrayBuffer());
+    if (buffer.length > MAX_BYTES) {
+      return NextResponse.json({ error: 'El video supera el límite de 500 MB' }, { status: 400 });
+    }
+
+    const videoId = crypto.randomUUID();
+    const originalName = path.basename(parsed.pathname) || 'video.mp4';
+    const ext = path.extname(originalName) || '.mp4';
+    const filename = `${Date.now()}${ext}`;
+    const key = `${user.id}/${videoId}/${filename}`;
+
+    await r2.send(new PutObjectCommand({
+      Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME!,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType.startsWith('video/') ? contentType : 'video/mp4',
+      ContentLength: buffer.length,
+    }));
+
+    const { error: dbError } = await supabase.from('videos').insert({
+      id: videoId,
+      user_id: user.id,
+      title: originalName,
+      source_url: key,
+      status: 'pending',
+    });
+
+    if (dbError) throw dbError;
+
+    console.log(`✅ Video importado desde URL → R2: ${key}`);
+    return NextResponse.json({ success: true, videoId });
+
+  } catch (err: unknown) {
+    if (err instanceof ApiError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    const message = err instanceof Error ? err.message : 'Error desconocido';
+    console.error('import-video error:', err);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
