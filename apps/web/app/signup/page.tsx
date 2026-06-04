@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Sparkles, Mail, Lock, User, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import GoogleLoginButton from "@/components/GoogleLoginButton";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -29,7 +30,7 @@ export default function SignupPage() {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${window.location.origin}/dashboard` },
+      options: { emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/dashboard` },
     });
 
     if (error) {
@@ -129,6 +130,17 @@ export default function SignupPage() {
               </button>
             </form>
           )}
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-slate-700" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="bg-slate-900/50 px-2 text-slate-400">O continúa con</span>
+            </div>
+          </div>
+
+          <GoogleLoginButton />
 
           <div className="mt-6 text-center text-sm text-slate-400">
             ¿Ya tienes cuenta?{" "}
