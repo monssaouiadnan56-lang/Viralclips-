@@ -64,6 +64,34 @@ export async function requireActiveProPlan(userId: string): Promise<void> {
   }
 }
 
+export async function requireUploadAccess(userId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('subscription_status, plan_name')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error) throw new ApiError('No se pudo verificar la suscripcion', 500);
+
+  const isPro = data?.subscription_status === 'active' && data.plan_name === 'pro';
+  if (isPro) return;
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const { count, error: countError } = await supabase
+    .from('videos')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('created_at', todayStart.toISOString());
+
+  if (countError) throw new ApiError('No se pudo verificar el límite diario', 500);
+
+  if ((count ?? 0) >= 1) {
+    throw new ApiError('Límite diario alcanzado. El plan gratuito permite 1 video por día. Actualiza a Pro para subir más.', 429);
+  }
+}
+
 export async function requireOwnedVideo(videoId: string, userId: string): Promise<VideoAccess> {
   const { data, error } = await supabase
     .from('videos')

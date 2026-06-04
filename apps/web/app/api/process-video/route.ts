@@ -9,7 +9,6 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
   ApiError,
   getServiceSupabase,
-  requireActiveProPlan,
   requireOwnedVideo,
   requireUser,
 } from '@/lib/server/auth';
@@ -99,7 +98,6 @@ export async function POST(request: Request) {
     }
 
     const user = await requireUser(request);
-    await requireActiveProPlan(user.id);
     const video = await requireOwnedVideo(videoId, user.id);
 
     await supabase.from('videos').update({ status: 'processing' }).eq('id', videoId);

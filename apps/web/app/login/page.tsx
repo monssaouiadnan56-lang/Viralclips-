@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Sparkles, Mail, Lock, ArrowRight } from "lucide-react";
+import GoogleLoginButton from "@/components/GoogleLoginButton";
 
 // Asumiendo que tienes tu cliente de supabase configurado así
 import { createClient } from "@/lib/supabase/client"; 
@@ -103,6 +104,17 @@ export default function LoginPage() {
               {!loading && <ArrowRight className="w-4 h-4" />}
             </button>
           </form>
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-slate-700" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="bg-slate-900/50 px-2 text-slate-400">O continúa con</span>
+            </div>
+          </div>
+
+          <GoogleLoginButton />
 
           <div className="mt-6 text-center text-sm text-slate-400">
             ¿No tienes cuenta?{" "}

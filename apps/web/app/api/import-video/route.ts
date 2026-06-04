@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import path from 'path';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { ApiError, getServiceSupabase, requireActiveProPlan, requireUser } from '@/lib/server/auth';
+import { ApiError, getServiceSupabase, requireUploadAccess, requireUser } from '@/lib/server/auth';
 
 const r2 = new S3Client({
   region: 'auto',
@@ -39,7 +39,7 @@ function requiresWorker(url: string): boolean {
 export async function POST(request: Request) {
   try {
     const user = await requireUser(request);
-    await requireActiveProPlan(user.id);
+    await requireUploadAccess(user.id);
 
     const { url } = await request.json() as { url?: string };
 
