@@ -1,15 +1,10 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { getStripe } from '@/lib/stripe';
+import { getServiceSupabase } from '@/lib/server/auth';
 import type Stripe from 'stripe';
 
 // En App Router NO se usa bodyParser:false — el body se lee con request.text()
 export const dynamic = 'force-dynamic';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!, // bypass RLS para actualizar cualquier perfil
-);
 
 export async function POST(request: Request) {
   const body      = await request.text(); // CRUCIAL: body crudo para verificar firma
@@ -127,6 +122,8 @@ async function updateProfileForStripeCustomer(
   userId: string | null,
   values: Record<string, string | null>,
 ): Promise<void> {
+  const supabase = getServiceSupabase();
+
   const { data, error } = await supabase
     .from('profiles')
     .update(values)
