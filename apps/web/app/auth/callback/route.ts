@@ -3,12 +3,18 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
+  const { searchParams, hash } = new URL(request.url);
   const code = searchParams.get('code');
-  const next = searchParams.get('next') ?? '/dashboard';
   const base = process.env.NEXT_PUBLIC_APP_URL || 'https://viralclips-web.vercel.app';
 
-  if (!code) {
+  // Si no hay code en params, intenta extraerlo del hash (para OAuth implícito)
+  let authCode = code;
+  if (!authCode && hash) {
+    const hashParams = new URLSearchParams(hash.substring(1));
+    authCode = hashParams.get('code') || null;
+  }
+
+  if (!authCode) {
     return NextResponse.redirect(`${base}/login?error=no_code`);
   }
 
@@ -30,7 +36,7 @@ export async function GET(request: Request) {
   );
 
   try {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { error } = await supabase.auth.exchangeCodeForSession(authCode);
 
     if (error) {
       console.error('Error exchanging code:', error);
@@ -38,7 +44,7 @@ export async function GET(request: Request) {
     }
 
     // Éxito - redirigir al dashboard
-    return NextResponse.redirect(`${base}${next}`);
+    return NextResponse.redirect(`${base}/dashboard`);
   } catch (err) {
     console.error('Callback error:', err);
     return NextResponse.redirect(`${base}/login?error=auth_failed`);
