@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -16,9 +16,7 @@ import AnimatedBackground from '@/components/AnimatedBackground';
 import UpgradeButton from '@/components/UpgradeButton';
 import ImportLinkModal from '@/components/ImportLinkModal';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient();
 
 const NAV_ITEMS = [
   { id: 'overview', icon: BarChart3, label: 'Dashboard' },

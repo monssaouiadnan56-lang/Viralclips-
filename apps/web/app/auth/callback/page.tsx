@@ -10,13 +10,25 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const supabase = createClient();
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        subscription.unsubscribe();
         router.replace('/dashboard');
-      } else {
+      } else if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+        subscription.unsubscribe();
         router.replace('/login?error=auth_failed');
       }
     });
+
+    // Fallback: si ya hay sesión activa al montar
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        subscription.unsubscribe();
+        router.replace('/dashboard');
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, [router]);
 
   return (
