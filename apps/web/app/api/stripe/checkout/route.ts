@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe';
+import { getStripe } from '@/lib/stripe';
 import { getServiceSupabase, requireUser } from '@/lib/server/auth';
 
 const supabase = getServiceSupabase();
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     }
 
     if (!customerId) {
-      const customer = await stripe.customers.create({
+      const customer = await getStripe().customers.create({
         email: user.email,
         metadata: { supabase_user_id: user.id },
       });
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     // ── 3. Crear Checkout Session ─────────────────────────────────────────
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       mode:     'subscription',
       customer: customerId,
       line_items: [
