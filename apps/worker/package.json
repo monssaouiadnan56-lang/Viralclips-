@@ -9,11 +9,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@viralclips/shared": "workspace:*",
     "@aws-sdk/client-s3": "^3.600.0",
+    "@aws-sdk/s3-request-presigner": "^3.1057.0",
     "@supabase/supabase-js": "^2.47.0",
+    "@viralclips/shared": "workspace:*",
     "dotenv": "^16.4.7",
     "express": "^4.21.0",
+    "ffmpeg-static": "^5.3.0",
     "fluent-ffmpeg": "^2.1.3",
     "openai": "^4.77.0",
     "yt-dlp-wrap": "^2.3.2"
