@@ -12,7 +12,6 @@ const r2 = new S3Client({
   },
 });
 
-const supabase = getServiceSupabase();
 const MAX_BYTES = 500 * 1024 * 1024;
 
 // Platforms that require yt-dlp (no direct video URL) → delegate to worker
@@ -37,6 +36,7 @@ function requiresWorker(url: string): boolean {
 }
 
 export async function POST(request: Request) {
+  const supabase = getServiceSupabase();
   try {
     const user = await requireUser(request);
     await requireUploadAccess(user.id);

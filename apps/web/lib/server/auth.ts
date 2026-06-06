@@ -1,9 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+let _serviceClient: SupabaseClient | null = null;
 
 interface AuthenticatedUser {
   id: string;
@@ -27,8 +24,14 @@ export class ApiError extends Error {
   }
 }
 
-export function getServiceSupabase() {
-  return supabase;
+export function getServiceSupabase(): SupabaseClient {
+  if (!_serviceClient) {
+    _serviceClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+  }
+  return _serviceClient;
 }
 
 export async function requireUser(request: Request): Promise<AuthenticatedUser> {
@@ -39,7 +42,7 @@ export async function requireUser(request: Request): Promise<AuthenticatedUser> 
     throw new ApiError('No autorizado', 401);
   }
 
-  const { data: { user }, error } = await supabase.auth.getUser(token);
+  const { data: { user }, error } = await getServiceSupabase().auth.getUser(token);
 
   if (error || !user) {
     throw new ApiError('No autorizado', 401);
@@ -49,7 +52,7 @@ export async function requireUser(request: Request): Promise<AuthenticatedUser> 
 }
 
 export async function requireActiveProPlan(userId: string): Promise<void> {
-  const { data, error } = await supabase
+  const { data, error } = await getServiceSupabase()
     .from('profiles')
     .select('subscription_status, plan_name')
     .eq('id', userId)
@@ -65,7 +68,7 @@ export async function requireActiveProPlan(userId: string): Promise<void> {
 }
 
 export async function requireUploadAccess(userId: string): Promise<void> {
-  const { data, error } = await supabase
+  const { data, error } = await getServiceSupabase()
     .from('profiles')
     .select('subscription_status, plan_name')
     .eq('id', userId)
@@ -79,7 +82,7 @@ export async function requireUploadAccess(userId: string): Promise<void> {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const { count, error: countError } = await supabase
+  const { count, error: countError } = await getServiceSupabase()
     .from('videos')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
@@ -93,7 +96,7 @@ export async function requireUploadAccess(userId: string): Promise<void> {
 }
 
 export async function requireOwnedVideo(videoId: string, userId: string): Promise<VideoAccess> {
-  const { data, error } = await supabase
+  const { data, error } = await getServiceSupabase()
     .from('videos')
     .select('id, user_id, source_url, title, status')
     .eq('id', videoId)

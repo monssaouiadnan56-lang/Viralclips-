@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 import { ApiError, getServiceSupabase, requireOwnedVideo, requireUser } from '@/lib/server/auth';
 
-const supabase = getServiceSupabase();
-
 export async function POST(request: Request) {
+  const supabase = getServiceSupabase();
   try {
     const body = await request.json() as { videoId?: string; title?: string };
     const { videoId, title } = body;

@@ -26,9 +26,8 @@ async function deleteR2Prefix(prefix: string): Promise<void> {
   );
 }
 
-const supabase = getServiceSupabase();
-
 export async function POST(request: Request) {
+  const supabase = getServiceSupabase();
   try {
     const body = await request.json() as { videoId?: string };
     const { videoId } = body;

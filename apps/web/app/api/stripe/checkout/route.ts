@@ -2,9 +2,8 @@ import { NextResponse } from 'next/server';
 import { getStripe } from '@/lib/stripe';
 import { getServiceSupabase, requireUser } from '@/lib/server/auth';
 
-const supabase = getServiceSupabase();
-
 export async function POST(request: Request) {
+  const supabase = getServiceSupabase();
   try {
     const user = await requireUser(request);
 
