@@ -163,6 +163,55 @@ importers:
         specifier: ^3.80.0
         version: 3.114.17(@cloudflare/workers-types@4.20260530.1)
 
+  apps/worker-railway:
+    dependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.600.0
+        version: 3.1057.0
+      '@aws-sdk/s3-request-presigner':
+        specifier: ^3.600.0
+        version: 3.1057.0
+      '@supabase/supabase-js':
+        specifier: ^2.39.0
+        version: 2.106.1
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.6
+      dotenv:
+        specifier: ^16.3.1
+        version: 16.6.1
+      express:
+        specifier: ^4.18.2
+        version: 4.22.2
+      ffmpeg-static:
+        specifier: ^5.2.0
+        version: 5.3.0
+      fluent-ffmpeg:
+        specifier: ^2.1.2
+        version: 2.1.3
+      openai:
+        specifier: ^4.77.0
+        version: 4.104.0(ws@8.18.0)
+    devDependencies:
+      '@types/cors':
+        specifier: ^2.8.17
+        version: 2.8.19
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.25
+      '@types/fluent-ffmpeg':
+        specifier: ^2.1.24
+        version: 2.1.28
+      '@types/node':
+        specifier: ^20.10.0
+        version: 20.19.41
+      tsx:
+        specifier: ^4.7.0
+        version: 4.22.3
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+
   packages/shared:
     devDependencies:
       typescript:
@@ -991,6 +1040,9 @@ packages:
   '@types/connect@3.4.38':
     resolution: {integrity: sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug==}
 
+  '@types/cors@2.8.19':
+    resolution: {integrity: sha512-mFNylyeyqN93lfe/9CSxOGREz8cpzAhH+E93xJ4xWQf62V8sQ/24reV2nyzUWM6H6Xji+GGHpkbLe7pVoUEskg==}
+
   '@types/d3-array@3.2.2':
     resolution: {integrity: sha512-hOLWVbm7uRza0BYXpIIW5pxfrKe0W+D5lrFiAEYR+pb6w3N2SwSMaJbXdUfSEv+dT4MfHBLtn5js0LAWaO6otw==}
 
@@ -1226,6 +1278,10 @@ packages:
   cookie@1.1.1:
     resolution: {integrity: sha512-ei8Aos7ja0weRpFzJnEA9UHJ/7XQmqglbRwnf2ATjcB9Wq874VKH9kfjjirM6UhU2/E5fFYadylyhFldcqSidQ==}
     engines: {node: '>=18'}
+
+  cors@2.8.6:
+    resolution: {integrity: sha512-tJtZBBHA6vjIAaF6EnIaq6laBBP9aq/Y3ouVJjEfoHbRBcHBAHYcMh/w8LDrk2PvIMMq8gmopa5D4V8RmbrxGw==}
+    engines: {node: '>= 0.10'}
 
   cssesc@3.0.0:
     resolution: {integrity: sha512-/Tb/JcjK111nNScGob5MNtsntNM1aCNUDipB/TkwZFhyDrrE47SOx/18wF2bbjgc3ZzCSKW1T5nt5EbFoAz/Vg==}
@@ -2977,6 +3033,10 @@ snapshots:
     dependencies:
       '@types/node': 20.19.41
 
+  '@types/cors@2.8.19':
+    dependencies:
+      '@types/node': 20.19.41
+
   '@types/d3-array@3.2.2': {}
 
   '@types/d3-color@3.1.3': {}
@@ -3227,6 +3287,11 @@ snapshots:
   cookie@0.7.2: {}
 
   cookie@1.1.1: {}
+
+  cors@2.8.6:
+    dependencies:
+      object-assign: 4.1.1
+      vary: 1.1.2
 
   cssesc@3.0.0: {}
 

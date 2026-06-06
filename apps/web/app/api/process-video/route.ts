@@ -21,10 +21,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Worker no configurado' }, { status: 503 });
     }
 
-    // Marcar como processing antes de delegar
-    await getServiceSupabase().from('videos').update({ status: 'processing' }).eq('id', videoId);
+    const supabase = getServiceSupabase();
+    await supabase.from('videos').update({ status: 'processing' }).eq('id', videoId);
 
-    // Delegar al worker — fire and forget (el frontend hace polling del estado)
+    const capturedVideoId = videoId;
     fetch(`${workerUrl}/process`, {
       method: 'POST',
       headers: {
@@ -32,7 +32,16 @@ export async function POST(request: Request) {
         'Authorization': `Bearer ${workerSecret}`,
       },
       body: JSON.stringify({ videoId, userId: user.id }),
-    }).catch(err => console.error('Worker request failed:', err));
+    }).then(async r => {
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({})) as { error?: string };
+        console.error(`Worker ${r.status} for video ${capturedVideoId}:`, body.error ?? '');
+        await supabase.from('videos').update({ status: 'failed' }).eq('id', capturedVideoId);
+      }
+    }).catch(async err => {
+      console.error('Worker unreachable:', err);
+      await supabase.from('videos').update({ status: 'failed' }).eq('id', capturedVideoId);
+    });
 
     return NextResponse.json({ success: true, message: 'Procesamiento iniciado' });
   } catch (err: unknown) {
