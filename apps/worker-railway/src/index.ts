@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
+import ws from 'ws';
 import { processVideo } from './processor';
 
 const app = express();
@@ -18,6 +19,7 @@ if (!WORKER_SECRET) {
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { realtime: { transport: ws } },
 );
 
 function auth(req: Request, res: Response, next: NextFunction): void {
