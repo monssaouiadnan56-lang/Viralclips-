@@ -5,6 +5,7 @@ import os from 'os';
 import fs from 'fs';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import ws from 'ws';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import YTDlpWrap from 'yt-dlp-wrap';
@@ -23,6 +24,11 @@ const WORKER_SECRET = process.env.WORKER_SECRET ?? '';
 
 if (!WORKER_SECRET) {
   console.warn('⚠️  WORKER_SECRET no configurado — todos los requests serán rechazados');
+}
+
+// Node.js < 22 lacks native WebSocket; polyfill before Supabase initialises
+if (typeof (globalThis as Record<string, unknown>).WebSocket === 'undefined') {
+  (globalThis as Record<string, unknown>).WebSocket = ws;
 }
 
 const supabase = createClient(
