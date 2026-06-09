@@ -19,7 +19,7 @@ if (!WORKER_SECRET) {
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { realtime: { transport: ws } },
+  { realtime: { transport: ws as any } },
 );
 
 function auth(req: Request, res: Response, next: NextFunction): void {
