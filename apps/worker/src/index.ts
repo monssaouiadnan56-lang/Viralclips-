@@ -19,7 +19,7 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 const app = express();
 app.use(express.json());
 
-const PORT = process.env.PORT ?? '3001';
+const PORT = process.env.PORT ?? '8080';
 const WORKER_SECRET = process.env.WORKER_SECRET ?? '';
 
 if (!WORKER_SECRET) {
@@ -365,6 +365,6 @@ app.post('/import-url', auth, async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`✅ ViralClips worker on :${PORT}`);
 });
