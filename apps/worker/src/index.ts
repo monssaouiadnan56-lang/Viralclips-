@@ -217,22 +217,27 @@ app.post('/process', auth, async (req, res) => {
 
   console.log(`\n🚀 Procesando video ${videoId} para usuario ${userId}`);
 
+  // ── 1. Validar que el video existe (antes de responder) ──────────────────
+  const { data: videoRow, error: videoErr } = await supabase
+    .from('videos').select('source_url, title').eq('id', videoId).eq('user_id', userId).single();
+
+  if (videoErr || !videoRow) {
+    res.status(404).json({ error: 'Video no encontrado' });
+    return;
+  }
+
+  // ── Responder 202 de inmediato para no bloquear la conexión ─────────────
+  // El procesamiento es largo (Whisper + GPT + FFmpeg). Si respondemos al final
+  // Railway/Vercel cierran la conexión por timeout antes de recibir la respuesta.
+  _currentJobId = videoId;
+  await supabase.from('videos').update({ status: 'processing' }).eq('id', videoId);
+  res.status(202).json({ message: 'Procesamiento iniciado' });
+
+  // ── Procesamiento en background (la conexión HTTP ya está cerrada) ────────
   const videoPath = path.join(os.tmpdir(), `${videoId}.mp4`);
   const audioPath = path.join(os.tmpdir(), `${videoId}.mp3`);
 
   try {
-    // ── 1. Obtener metadata del video ────────────────────────────────────────
-    const { data: videoRow, error: videoErr } = await supabase
-      .from('videos').select('source_url, title').eq('id', videoId).eq('user_id', userId).single();
-
-    if (videoErr || !videoRow) {
-      res.status(404).json({ error: 'Video no encontrado' });
-      return;
-    }
-
-    _currentJobId = videoId;
-    await supabase.from('videos').update({ status: 'processing' }).eq('id', videoId);
-
     // ── 2. Descargar desde R2 ────────────────────────────────────────────────
     console.log(`⬇️  Descargando desde R2: ${videoRow.source_url}`);
     const buffer = await downloadFromR2(videoRow.source_url as string);
@@ -294,15 +299,12 @@ app.post('/process', auth, async (req, res) => {
 
     const finalStatus = generatedClips.length > 0 ? 'completed' : 'failed';
     await supabase.from('videos').update({ status: finalStatus }).eq('id', videoId);
-
     console.log(`\n✅ Procesamiento completado: ${generatedClips.length} clips (${finalStatus})`);
-    res.json({ success: true, generatedClips, status: finalStatus });
 
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error desconocido';
     console.error('❌ Error procesando video:', message);
     await supabase.from('videos').update({ status: 'failed' }).eq('id', videoId);
-    res.status(500).json({ error: message });
   } finally {
     _currentJobId = null;
     await safeDelete(videoPath);
