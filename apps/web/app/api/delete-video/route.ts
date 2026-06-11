@@ -36,10 +36,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'videoId requerido' }, { status: 400 });
     }
 
-    console.log(`🗑️  Deleting video ${videoId}...`);
-
     const user = await requireUser(request);
     const video = await requireOwnedVideo(videoId, user.id);
+
+    console.log(`🗑️  Deleting video ${videoId}...`);
 
     // Delete R2 objects — non-fatal so we use allSettled
     await Promise.allSettled([
