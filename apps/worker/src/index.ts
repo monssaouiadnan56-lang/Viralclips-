@@ -48,6 +48,21 @@ const r2 = new S3Client({
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 const ytDlp = new YTDlpWrap(process.env.YTDLP_PATH ?? 'yt-dlp');
 
+// Tracks the video being processed so SIGTERM can mark it failed
+let _currentJobId: string | null = null;
+
+async function releaseCurrentJob(): Promise<void> {
+  if (_currentJobId) {
+    try {
+      await supabase.from('videos').update({ status: 'failed' }).eq('id', _currentJobId);
+    } catch { /* non-fatal — process is exiting */ }
+    _currentJobId = null;
+  }
+}
+
+process.on('SIGTERM', async () => { await releaseCurrentJob(); process.exit(0); });
+process.on('SIGINT',  async () => { await releaseCurrentJob(); process.exit(0); });
+
 function auth(req: express.Request, res: express.Response, next: express.NextFunction): void {
   const token = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
   if (!token || token !== WORKER_SECRET) {
@@ -219,6 +234,7 @@ app.post('/process', auth, async (req, res) => {
       return;
     }
 
+    _currentJobId = videoId;
     await supabase.from('videos').update({ status: 'processing' }).eq('id', videoId);
 
     // ── 2. Descargar desde R2 ────────────────────────────────────────────────
@@ -267,7 +283,8 @@ app.post('/process', auth, async (req, res) => {
         const r2Key = `clips/${videoId}/clip-${i+1}.mp4`;
         const clipUrl = await uploadClipToR2(clipPath, r2Key);
 
-        await supabase.from('clips').insert({ video_id: videoId, title: moment.title, url: clipUrl });
+        const { error: clipErr } = await supabase.from('clips').insert({ video_id: videoId, title: moment.title, url: clipUrl });
+        if (clipErr) throw new Error(`Error guardando clip en BD: ${clipErr.message}`);
         generatedClips.push({ title: moment.title, url: clipUrl });
         console.log(`   ✅ Clip ${i+1} subido`);
       } catch (err) {
@@ -290,6 +307,7 @@ app.post('/process', auth, async (req, res) => {
     await supabase.from('videos').update({ status: 'failed' }).eq('id', videoId);
     res.status(500).json({ error: message });
   } finally {
+    _currentJobId = null;
     await safeDelete(videoPath);
     await safeDelete(audioPath);
   }

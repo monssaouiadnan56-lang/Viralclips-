@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     const user = await requireUser(request);
     await requireOwnedVideo(videoId, user.id);
 
-    const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL ?? process.env.WORKER_URL;
+    const workerUrl = process.env.WORKER_URL;
     const workerSecret = process.env.WORKER_SECRET ?? '';
 
     if (!workerUrl) {

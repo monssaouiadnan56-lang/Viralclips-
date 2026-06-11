@@ -108,13 +108,17 @@ export async function POST(request: Request) {
     }
 
     const contentLength = Number(videoRes.headers.get('content-length') ?? '0');
+    if (!contentLength) {
+      return NextResponse.json(
+        { error: 'El servidor de origen no indica el tamaño del archivo. Sube el vídeo directamente.' },
+        { status: 400 },
+      );
+    }
     if (contentLength > MAX_BYTES) {
       return NextResponse.json({ error: 'El video supera el límite de 500 MB' }, { status: 400 });
     }
-
-    const buffer = Buffer.from(await videoRes.arrayBuffer());
-    if (buffer.length > MAX_BYTES) {
-      return NextResponse.json({ error: 'El video supera el límite de 500 MB' }, { status: 400 });
+    if (!videoRes.body) {
+      return NextResponse.json({ error: 'La respuesta del servidor no contiene datos' }, { status: 400 });
     }
 
     const videoId = crypto.randomUUID();
@@ -126,9 +130,9 @@ export async function POST(request: Request) {
     await r2.send(new PutObjectCommand({
       Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME!,
       Key: key,
-      Body: buffer,
+      Body: videoRes.body,
       ContentType: contentType.startsWith('video/') ? contentType : 'video/mp4',
-      ContentLength: buffer.length,
+      ContentLength: contentLength,
     }));
 
     const { error: dbError } = await supabase.from('videos').insert({
