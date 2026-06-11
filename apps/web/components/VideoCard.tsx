@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Film, Calendar, MoreVertical, Sparkles, ChevronDown,
@@ -18,10 +18,7 @@ interface VideoCardProps {
   onRefresh?: () => void;
 }
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const supabase = createClient();
 
 const STATUS_MAP: Record<string, { label: string; textColor: string; dotColor: string; pulse: boolean }> = {
   completed: { label: 'Completado', textColor: 'text-green-400', dotColor: 'bg-green-400', pulse: false },
