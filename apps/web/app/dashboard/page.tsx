@@ -122,6 +122,18 @@ export default function DashboardPage() {
     fetchClips(userId);
   };
 
+  const resolveClipUrl = async (raw: string): Promise<string> => {
+    if (raw.startsWith('http')) return raw;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Sin sesión');
+    const res = await fetch(`/api/get-clip-url?key=${encodeURIComponent(raw)}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    const json = await res.json() as { url?: string; error?: string };
+    if (!json.url) throw new Error(json.error ?? 'URL no disponible');
+    return json.url;
+  };
+
   const handleUploadSuccess = handleRefresh;
 
   const handleLogout = async () => {
@@ -450,7 +462,9 @@ export default function DashboardPage() {
                       isExpanded={expandedVideo === video.id}
                       onToggle={() => toggleVideoClips(video.id)}
                       videoClips={clipsByVideoId[video.id] ?? []}
-                      onPlayClip={url => setSelectedClip(url)}
+                      onPlayClip={async url => {
+                        try { setSelectedClip(await resolveClipUrl(url)); } catch { /* non-fatal */ }
+                      }}
                       onRefresh={handleRefresh}
                     />
                   ))}
@@ -516,7 +530,13 @@ export default function DashboardPage() {
                           </div>
                         </div>
                         <button
-                          onClick={() => clip.url && setSelectedClip(clip.url)}
+                          onClick={async () => {
+                            if (!clip.url) return;
+                            try {
+                              const url = await resolveClipUrl(clip.url as string);
+                              setSelectedClip(url);
+                            } catch { /* non-fatal */ }
+                          }}
                           className="w-full py-2 bg-gradient-to-r from-[#d0bcff] to-[#adc6ff] hover:brightness-110 text-[#3c0091] text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5"
                         >
                           <Play className="w-3.5 h-3.5" />

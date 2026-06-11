@@ -90,7 +90,7 @@ async function downloadFromR2(key: string): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer());
 }
 
-async function uploadClipToR2(localPath: string, key: string): Promise<string> {
+async function uploadClipToR2(localPath: string, key: string): Promise<void> {
   const stat = fs.statSync(localPath);
   await r2.send(new PutObjectCommand({
     Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME!,
@@ -99,10 +99,6 @@ async function uploadClipToR2(localPath: string, key: string): Promise<string> {
     ContentType: 'video/mp4',
     ContentLength: stat.size,
   }));
-  return getSignedUrl(r2, new GetObjectCommand({
-    Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME!,
-    Key: key,
-  }), { expiresIn: 7 * 24 * 3600 });
 }
 
 function extractAudio(videoPath: string, audioPath: string): Promise<void> {
@@ -281,11 +277,12 @@ app.post('/process', auth, async (req, res) => {
         }
 
         const r2Key = `clips/${videoId}/clip-${i+1}.mp4`;
-        const clipUrl = await uploadClipToR2(clipPath, r2Key);
+        await uploadClipToR2(clipPath, r2Key);
 
-        const { error: clipErr } = await supabase.from('clips').insert({ video_id: videoId, title: moment.title, url: clipUrl });
+        // Store the R2 key — not a signed URL — so clips never expire
+        const { error: clipErr } = await supabase.from('clips').insert({ video_id: videoId, title: moment.title, url: r2Key });
         if (clipErr) throw new Error(`Error guardando clip en BD: ${clipErr.message}`);
-        generatedClips.push({ title: moment.title, url: clipUrl });
+        generatedClips.push({ title: moment.title, url: r2Key });
         console.log(`   ✅ Clip ${i+1} subido`);
       } catch (err) {
         console.error(`   ❌ Error en clip ${i+1}:`, err instanceof Error ? err.message : err);

@@ -334,16 +334,58 @@ export default function VideoCard({
 }
 
 function ClipMiniCard({ clip, index, onPlay }: { clip: any; index: number; onPlay?: (url: string) => void }) {
+  const [busy, setBusy] = useState(false);
+
+  const resolveUrl = async (): Promise<string | null> => {
+    if (!clip.url) return null;
+    // Legacy clips stored a signed https URL directly — use as-is
+    if (clip.url.startsWith('http')) return clip.url as string;
+    // New clips store the R2 key — fetch a fresh 1-hour signed URL
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return null;
+    const res = await fetch(`/api/get-clip-url?key=${encodeURIComponent(clip.url as string)}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    const json = await res.json() as { url?: string };
+    return json.url ?? null;
+  };
+
+  const handlePlay = async () => {
+    setBusy(true);
+    try {
+      const url = await resolveUrl();
+      if (url) onPlay?.(url);
+    } catch { /* non-fatal */ } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    setBusy(true);
+    try {
+      const url = await resolveUrl();
+      if (!url) return;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(clip.title as string | undefined) ?? `clip-${index + 1}`}.mp4`;
+      a.click();
+    } catch { /* non-fatal */ } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="rounded-xl overflow-hidden border border-white/[0.06] bg-white/[0.02] group">
       <div
         className="relative aspect-video bg-gradient-to-br from-purple-900/40 to-blue-950/60 flex items-center justify-center cursor-pointer"
-        onClick={() => clip.url && onPlay?.(clip.url)}
+        onClick={handlePlay}
       >
         <Film className="w-5 h-5 text-purple-400/25" />
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
           <div className="w-8 h-8 rounded-full bg-white/25 border border-white/40 flex items-center justify-center">
-            <Play className="w-3.5 h-3.5 text-white fill-white ml-0.5" />
+            {busy
+              ? <div className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" />
+              : <Play className="w-3.5 h-3.5 text-white fill-white ml-0.5" />}
           </div>
         </div>
         <div className="absolute top-1.5 left-1.5 flex items-center gap-1 px-1.5 py-0.5 bg-purple-600/90 rounded text-[9px] font-bold">
@@ -357,21 +399,21 @@ function ClipMiniCard({ clip, index, onPlay }: { clip: any; index: number; onPla
         </p>
         <div className="flex gap-1.5">
           <button
-            onClick={() => clip.url && onPlay?.(clip.url)}
-            className="flex-1 py-1 text-[10px] font-semibold bg-gradient-to-r from-purple-600/80 to-blue-600/80 hover:from-purple-500 hover:to-blue-500 text-white rounded-md transition-all flex items-center justify-center gap-1"
+            onClick={handlePlay}
+            disabled={busy}
+            className="flex-1 py-1 text-[10px] font-semibold bg-gradient-to-r from-purple-600/80 to-blue-600/80 hover:from-purple-500 hover:to-blue-500 text-white rounded-md transition-all flex items-center justify-center gap-1 disabled:opacity-50"
           >
             <Play className="w-2.5 h-2.5" />
             Ver
           </button>
-          <a
-            href={clip.url ?? '#'}
-            download={`${clip.title ?? `clip-${index + 1}`}.mp4`}
-            onClick={(e) => e.stopPropagation()}
-            className="flex-1 py-1 text-[10px] font-medium bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.08] text-gray-300 rounded-md transition-all flex items-center justify-center gap-1"
+          <button
+            onClick={handleDownload}
+            disabled={busy}
+            className="flex-1 py-1 text-[10px] font-medium bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.08] text-gray-300 rounded-md transition-all flex items-center justify-center gap-1 disabled:opacity-50"
           >
             <Download className="w-2.5 h-2.5" />
             Bajar
-          </a>
+          </button>
         </div>
       </div>
     </div>
