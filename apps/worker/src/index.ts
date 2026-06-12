@@ -70,7 +70,7 @@ async function recoverStuckJobs(): Promise<void> {
     .from('videos')
     .update({ status: 'failed' })
     .eq('status', 'processing')
-    .lt('updated_at', stuckBefore);
+    .lt('created_at', stuckBefore);
   if (error) console.warn('⚠️  recoverStuckJobs:', error.message);
   else console.log('🔄 Stuck-job recovery ran');
 }
