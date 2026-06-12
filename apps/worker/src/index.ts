@@ -63,6 +63,18 @@ async function releaseCurrentJob(): Promise<void> {
 process.on('SIGTERM', async () => { await releaseCurrentJob(); process.exit(0); });
 process.on('SIGINT',  async () => { await releaseCurrentJob(); process.exit(0); });
 
+// On startup, unstick videos left in 'processing' from a previous crash
+async function recoverStuckJobs(): Promise<void> {
+  const stuckBefore = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const { error } = await supabase
+    .from('videos')
+    .update({ status: 'failed' })
+    .eq('status', 'processing')
+    .lt('updated_at', stuckBefore);
+  if (error) console.warn('⚠️  recoverStuckJobs:', error.message);
+  else console.log('🔄 Stuck-job recovery ran');
+}
+
 function auth(req: express.Request, res: express.Response, next: express.NextFunction): void {
   const token = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
   if (!token || token !== WORKER_SECRET) {
@@ -384,4 +396,5 @@ app.post('/import-url', auth, async (req, res) => {
 
 app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`✅ ViralClips worker on :${PORT}`);
+  recoverStuckJobs().catch(err => console.warn('recoverStuckJobs failed:', err));
 });
