@@ -161,17 +161,88 @@ async function safeDelete(filePath: string): Promise<void> {
   try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch { /* non-fatal */ }
 }
 
-async function transcribe(videoPath: string, audioPath: string): Promise<{ text: string; segments: TranscriptSegment[] }> {
-  await extractAudio(videoPath, audioPath);
+const WHISPER_MAX_BYTES = 24 * 1024 * 1024; // 24 MB — below the 25 MB Whisper limit
+const CHUNK_SECONDS = 20 * 60;              // 20-minute chunks
+
+function splitAudio(audioPath: string, chunkDir: string): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    const pattern = path.join(chunkDir, 'chunk_%03d.mp3');
+    ffmpeg(audioPath)
+      .outputOptions([`-f segment`, `-segment_time ${CHUNK_SECONDS}`, '-c copy'])
+      .output(pattern)
+      .on('end', () => {
+        const files = fs.readdirSync(chunkDir)
+          .filter(f => f.startsWith('chunk_') && f.endsWith('.mp3'))
+          .sort()
+          .map(f => path.join(chunkDir, f));
+        resolve(files);
+      })
+      .on('error', reject)
+      .run();
+  });
+}
+
+async function transcribeChunk(
+  chunkPath: string,
+  offsetSeconds: number,
+): Promise<{ text: string; segments: TranscriptSegment[] }> {
   const result = await openai.audio.transcriptions.create({
-    file: fs.createReadStream(audioPath),
+    file: fs.createReadStream(chunkPath),
     model: 'whisper-1',
     response_format: 'verbose_json',
     language: 'es',
   }) as unknown as { text: string; segments: Array<{ start: number; end: number; text: string }> };
-  await safeDelete(audioPath);
-  const segments = (result.segments ?? []).map(s => ({ start: s.start, end: s.end, text: s.text.trim() }));
+  const segments = (result.segments ?? []).map(s => ({
+    start: s.start + offsetSeconds,
+    end: s.end + offsetSeconds,
+    text: s.text.trim(),
+  }));
   return { text: result.text, segments };
+}
+
+async function transcribe(videoPath: string, audioPath: string): Promise<{ text: string; segments: TranscriptSegment[] }> {
+  await extractAudio(videoPath, audioPath);
+
+  const audioSize = fs.statSync(audioPath).size;
+
+  if (audioSize <= WHISPER_MAX_BYTES) {
+    const result = await openai.audio.transcriptions.create({
+      file: fs.createReadStream(audioPath),
+      model: 'whisper-1',
+      response_format: 'verbose_json',
+      language: 'es',
+    }) as unknown as { text: string; segments: Array<{ start: number; end: number; text: string }> };
+    await safeDelete(audioPath);
+    const segments = (result.segments ?? []).map(s => ({ start: s.start, end: s.end, text: s.text.trim() }));
+    return { text: result.text, segments };
+  }
+
+  // Audio exceeds Whisper limit — split into 20-minute chunks
+  console.log(`📏 Audio ${(audioSize / 1024 / 1024).toFixed(1)} MB > 24 MB, dividiendo en chunks de ${CHUNK_SECONDS / 60} min...`);
+  const chunkDir = path.join(os.tmpdir(), `chunks-${path.basename(audioPath, '.mp3')}`);
+  fs.mkdirSync(chunkDir, { recursive: true });
+
+  try {
+    const chunkPaths = await splitAudio(audioPath, chunkDir);
+    console.log(`🔀 ${chunkPaths.length} chunks creados`);
+
+    const allSegments: TranscriptSegment[] = [];
+    const allText: string[] = [];
+
+    for (let i = 0; i < chunkPaths.length; i++) {
+      const chunkPath = chunkPaths[i]!;
+      const offsetSeconds = i * CHUNK_SECONDS;
+      console.log(`   🎙️  Transcribiendo chunk ${i + 1}/${chunkPaths.length} (offset ${offsetSeconds}s)...`);
+      const { text, segments } = await transcribeChunk(chunkPath, offsetSeconds);
+      allText.push(text);
+      allSegments.push(...segments);
+    }
+
+    return { text: allText.join(' '), segments: allSegments };
+  } finally {
+    await safeDelete(audioPath);
+    try { fs.rmSync(chunkDir, { recursive: true, force: true }); } catch { /* non-fatal */ }
+  }
 }
 
 async function detectMoments(text: string, segments: TranscriptSegment[]): Promise<ViralMoment[]> {
