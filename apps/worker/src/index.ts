@@ -266,7 +266,7 @@ async function transcribe(videoPath: string, audioPath: string): Promise<{ text:
   }
 }
 
-async function detectMoments(text: string, segments: TranscriptSegment[]): Promise<ViralMoment[]> {
+async function detectMoments(text: string, segments: TranscriptSegment[], clipCount: number): Promise<ViralMoment[]> {
   if (segments.length > 0) {
     const lastSeg = segments[segments.length - 1]!;
     const formatted = segments.map((s, i) => `[${i}] ${s.start.toFixed(1)}s-${s.end.toFixed(1)}s: ${s.text}`).join('\n');
@@ -274,7 +274,7 @@ async function detectMoments(text: string, segments: TranscriptSegment[]): Promi
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: 'Eres un experto en contenido viral. Devuelve JSON con índices enteros exactos de la lista numerada.' },
-        { role: 'user', content: `Transcripción indexada (duración: ${lastSeg.end.toFixed(1)}s):\n\n${formatted.substring(0, 13000)}\n\nIdentifica 3-5 momentos virales para TikTok/Reels (30-90s cada uno).\n\nREGLAS:\n- start_segment_idx y end_segment_idx deben ser índices enteros [0..${segments.length-1}]\n- Duración entre 30 y 90 segundos\n\nResponde SOLO con: {"moments":[{"title":"...","description":"...","virality_score":8.5,"start_segment_idx":5,"end_segment_idx":18}]}` },
+        { role: 'user', content: `Transcripción indexada (duración: ${lastSeg.end.toFixed(1)}s):\n\n${formatted.substring(0, 13000)}\n\nIdentifica exactamente ${clipCount} momentos virales para TikTok/Reels (30-90s cada uno).\n\nREGLAS:\n- start_segment_idx y end_segment_idx deben ser índices enteros [0..${segments.length-1}]\n- Duración entre 30 y 90 segundos\n- Devuelve exactamente ${clipCount} momentos\n\nResponde SOLO con: {"moments":[{"title":"...","description":"...","virality_score":8.5,"start_segment_idx":5,"end_segment_idx":18}]}` },
       ],
       response_format: { type: 'json_object' },
       temperature: 0.5,
@@ -292,7 +292,7 @@ async function detectMoments(text: string, segments: TranscriptSegment[]): Promi
     model: 'gpt-4o-mini',
     messages: [
       { role: 'system', content: 'Eres un experto en contenido viral. Devuelve JSON válido.' },
-      { role: 'user', content: `Analiza esta transcripción e identifica 3 momentos virales para TikTok.\n\n${text.substring(0, 12000)}\n\nResponde SOLO con: {"moments":[{"title":"...","description":"...","virality_score":8.5,"start_time":30.0,"end_time":90.0}]}` },
+      { role: 'user', content: `Analiza esta transcripción e identifica exactamente ${clipCount} momentos virales para TikTok.\n\n${text.substring(0, 12000)}\n\nResponde SOLO con: {"moments":[{"title":"...","description":"...","virality_score":8.5,"start_time":30.0,"end_time":90.0}]}` },
     ],
     response_format: { type: 'json_object' },
     temperature: 0.7,
@@ -309,10 +309,11 @@ app.get('/health', (_req, res) => {
 
 // ── POST /process ─────────────────────────────────────────────────────────────
 
-interface ProcessBody { videoId?: string; userId?: string; }
+interface ProcessBody { videoId?: string; userId?: string; clipCount?: number; }
 
 app.post('/process', auth, async (req, res) => {
-  const { videoId, userId } = req.body as ProcessBody;
+  const { videoId, userId, clipCount: rawClipCount } = req.body as ProcessBody;
+  const clipCount = Math.min(Math.max(Number.isInteger(rawClipCount) ? (rawClipCount as number) : 3, 3), 9);
 
   if (!videoId || !userId) {
     res.status(400).json({ error: 'videoId y userId son requeridos' });
@@ -355,13 +356,13 @@ app.post('/process', auth, async (req, res) => {
 
     // ── 4. Análisis de momentos virales con GPT ──────────────────────────────
     console.log('🤖 Analizando momentos virales...');
-    const moments = await detectMoments(text, segments);
+    const moments = await detectMoments(text, segments, clipCount);
     console.log(`🎯 ${moments.length} momentos detectados`);
 
     // ── 5. Generar clips con FFmpeg ──────────────────────────────────────────
     const generatedClips = [];
 
-    for (let i = 0; i < Math.min(moments.length, 3); i++) {
+    for (let i = 0; i < Math.min(moments.length, clipCount); i++) {
       const moment = moments[i]!;
       const clipPath = path.join(os.tmpdir(), `${videoId}-clip-${i+1}.mp4`);
       const startTime = Math.max(0, moment.start_time);

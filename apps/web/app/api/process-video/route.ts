@@ -6,8 +6,9 @@ export async function POST(request: Request) {
   const supabase = getServiceSupabase();
 
   try {
-    const body = await request.json() as { videoId?: string };
+    const body = await request.json() as { videoId?: string; clipCount?: number };
     videoId = body.videoId;
+    const clipCount = Math.min(Math.max(Number.isInteger(body.clipCount) ? (body.clipCount as number) : 3, 3), 9);
 
     if (!videoId) {
       return NextResponse.json({ error: 'videoId requerido' }, { status: 400 });
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${workerSecret}`,
       },
-      body: JSON.stringify({ videoId, userId: user.id }),
+      body: JSON.stringify({ videoId, userId: user.id, clipCount }),
     });
 
     if (!workerRes.ok) {

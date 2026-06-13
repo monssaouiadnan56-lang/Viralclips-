@@ -44,6 +44,9 @@ export default function VideoCard({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // Clip count selector
+  const [selectedClipCount, setSelectedClipCount] = useState(3);
+
   // Edit mode
   const [editMode, setEditMode] = useState(false);
   const [editTitle, setEditTitle] = useState<string>(String(video.title ?? ''));
@@ -72,7 +75,7 @@ export default function VideoCard({
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ videoId: video.id }),
+        body: JSON.stringify({ videoId: video.id, clipCount: selectedClipCount }),
       });
       const data = await res.json() as { error?: string };
       if (res.ok) {
@@ -263,13 +266,33 @@ export default function VideoCard({
           </div>
 
           {video.status === 'pending' && (
-            <button
-              onClick={handleProcess}
-              className="w-full mt-4 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white text-sm font-semibold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-900/30"
-            >
-              <Sparkles className="w-4 h-4" />
-              Procesar con IA
-            </button>
+            <div className="mt-4 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">Clips a generar</span>
+                <div className="flex gap-1">
+                  {([3, 4, 5, 6, 7, 8, 9] as const).map(n => (
+                    <button
+                      key={n}
+                      onClick={() => setSelectedClipCount(n)}
+                      className={`w-6 h-6 text-[11px] font-semibold rounded-md transition-all ${
+                        selectedClipCount === n
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-white/[0.06] text-gray-400 hover:bg-white/[0.1] hover:text-gray-200'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={handleProcess}
+                className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white text-sm font-semibold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-900/30"
+              >
+                <Sparkles className="w-4 h-4" />
+                Procesar con IA
+              </button>
+            </div>
           )}
 
           {video.status === 'processing' && (
