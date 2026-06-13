@@ -45,7 +45,7 @@ const r2 = new S3Client({
   },
 });
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY!, maxRetries: 3 });
 const ytDlp = new YTDlpWrap(process.env.YTDLP_PATH ?? 'yt-dlp');
 
 // Tracks the video being processed so SIGTERM can mark it failed
@@ -182,6 +182,23 @@ function splitAudio(audioPath: string, chunkDir: string): Promise<string[]> {
   });
 }
 
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts: number, label: string): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxAttempts) {
+        const delayMs = attempt * 8000;
+        console.warn(`   ⚠️  ${label} intento ${attempt} fallido, reintentando en ${delayMs / 1000}s:`, err instanceof Error ? err.message : err);
+        await new Promise(r => setTimeout(r, delayMs));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 async function transcribeChunk(
   chunkPath: string,
   offsetSeconds: number,
@@ -233,7 +250,11 @@ async function transcribe(videoPath: string, audioPath: string): Promise<{ text:
       const chunkPath = chunkPaths[i]!;
       const offsetSeconds = i * CHUNK_SECONDS;
       console.log(`   🎙️  Transcribiendo chunk ${i + 1}/${chunkPaths.length} (offset ${offsetSeconds}s)...`);
-      const { text, segments } = await transcribeChunk(chunkPath, offsetSeconds);
+      const { text, segments } = await withRetry(
+        () => transcribeChunk(chunkPath, offsetSeconds),
+        4,
+        `chunk ${i + 1}/${chunkPaths.length}`,
+      );
       allText.push(text);
       allSegments.push(...segments);
     }
