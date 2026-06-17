@@ -436,7 +436,7 @@ app.post('/import-url', auth, async (req, res) => {
   try {
     let title = 'Video';
     try {
-      const infoRaw = await ytDlp.execPromise([url, '--dump-json', '--no-playlist', '--no-warnings']);
+      const infoRaw = await ytDlp.execPromise([url, '--dump-json', '--no-playlist', '--no-warnings', '--extractor-args', 'youtube:player_client=android,ios']);
       const info = JSON.parse(infoRaw.trim()) as { title?: string };
       if (info.title) title = info.title;
     } catch (e) {
@@ -451,6 +451,7 @@ app.post('/import-url', auth, async (req, res) => {
       '--max-filesize', '500m',
       '--merge-output-format', 'mp4',
       '--no-warnings',
+      '--extractor-args', 'youtube:player_client=android,ios',
     ]);
 
     const tmpFiles = fs.readdirSync(os.tmpdir()).filter(f => f.startsWith(`${videoId}.`));
