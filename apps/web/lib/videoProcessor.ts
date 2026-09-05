@@ -4,7 +4,6 @@ import path from 'path';
 
 // Usar require() en runtime para que Next.js NO incruste la ruta durante el build.
 // Con import estático, Next.js serializa el string de ruta apuntando a .next/vendor-chunks/
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const ffmpegBinaryPath: string = require('ffmpeg-static');
 
 if (!ffmpegBinaryPath) {

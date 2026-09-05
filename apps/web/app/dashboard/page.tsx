@@ -47,6 +47,7 @@ export default function DashboardPage() {
   });
   const router = useRouter();
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { checkUser(); }, []);
 
   const isProcessing = videos.some(v => v.status === 'processing');
@@ -726,3 +727,4 @@ function StatusBadge({ status }: { status: string }) {
     </span>
   );
 }
+

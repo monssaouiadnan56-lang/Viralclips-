@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { ApiError, requireUser } from '@/lib/server/auth';
+import { ApiError, getServiceSupabase, requireUser } from '@/lib/server/auth';
 
 const s3 = new S3Client({
   region: 'auto',
@@ -14,13 +14,44 @@ const s3 = new S3Client({
 
 export async function GET(request: Request) {
   try {
-    await requireUser(request);
+    const user = await requireUser(request);
 
     const { searchParams } = new URL(request.url);
     const key = searchParams.get('key');
 
     if (!key) {
       return NextResponse.json({ error: 'key requerido' }, { status: 400 });
+    }
+
+    const supabase = getServiceSupabase();
+    const { data: clip, error: clipError } = await supabase
+      .from('clips')
+      .select('video_id')
+      .eq('url', key)
+      .maybeSingle();
+
+    if (clipError) {
+      return NextResponse.json({ error: clipError.message }, { status: 500 });
+    }
+
+    const videoId = typeof clip?.video_id === 'string' ? clip.video_id : null;
+    if (!videoId) {
+      return NextResponse.json({ error: 'Clip no encontrado' }, { status: 404 });
+    }
+
+    const { data: video, error: videoError } = await supabase
+      .from('videos')
+      .select('id')
+      .eq('id', videoId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (videoError) {
+      return NextResponse.json({ error: videoError.message }, { status: 500 });
+    }
+
+    if (!video) {
+      return NextResponse.json({ error: 'Clip no encontrado' }, { status: 404 });
     }
 
     const url = await getSignedUrl(
